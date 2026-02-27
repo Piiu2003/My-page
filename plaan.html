@@ -74,14 +74,15 @@
         #timeline-container::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 6px; background-color: #dcdde1; transform: translateX(-50%); z-index: 1; }
 
         .time-slot {
-            width: 180px; height: 60px; background-color: var(--slot-empty); border-radius: 30px;
+            width: 190px; height: 65px; background-color: var(--slot-empty); border-radius: 30px;
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
             position: relative; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.08);
             transition: all 0.3s ease; z-index: 2; margin: 10px 0; border: 3px solid #fff;
         }
         .time-slot:hover { transform: scale(1.05) !important; border-color: #2d3436; }
         
-        .time-label { font-size: 0.75rem; font-weight: bold; opacity: 0.7; pointer-events: none; color: #333;}
+        /* Updated Time Label formatting */
+        .time-label { font-size: 0.65rem; font-weight: bold; opacity: 0.75; pointer-events: none; color: #333; margin-bottom: 2px;}
         .task-label { font-weight: bold; font-size: 0.9rem; pointer-events: none; text-align: center; line-height: 1.2; color: #fff;}
 
         .drag-over { background-color: #ffeaa7; transform: scale(1.1) !important;}
@@ -109,6 +110,302 @@
         <div>
             <h3>📚 Activity Menu</h3>
             <p style="font-size: 0.8rem; color: #777; margin: 0 0 10px 0;">Tap card to select. Tap again to deselect.</p>
+            <div class="card-container">
+                <div class="draggable-card c-1" draggable="true" data-type="task" data-name="Subject 1" data-duration="2" data-color="var(--card-1)" onclick="selectCard(this)" ondragstart="handleDragStart(event)">
+                    <span class="card-title">Subject 1 (2h)</span>
+                    <span class="edit-btn" onclick="editCard(event, this)">✏️</span>
+                </div>
+                <div class="draggable-card c-2" draggable="true" data-type="task" data-name="Subject 2" data-duration="1.5" data-color="var(--card-2)" onclick="selectCard(this)" ondragstart="handleDragStart(event)">
+                    <span class="card-title">Subject 2 (1.5h)</span>
+                    <span class="edit-btn" onclick="editCard(event, this)">✏️</span>
+                </div>
+                <div class="draggable-card c-job" draggable="true" data-type="job" data-name="Job Shift" data-duration="2" data-color="var(--job-color)" onclick="selectCard(this)" ondragstart="handleDragStart(event)">
+                    <span class="card-title">Job Shift (2h)</span>
+                    <span class="edit-btn" onclick="editCard(event, this)">✏️</span>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h3>⚙️ Quick Actions</h3>
+            <div class="controls">
+                <button class="btn-clear" onclick="clearTimeline()">🧹 Clear Timeline</button>
+                <button class="btn-end" onclick="endDay()">🏁 End Day Summary</button>
+            </div>
+        </div>
+
+        <div>
+            <h3>🗺️ Blueprint</h3>
+            <textarea id="blueprint" placeholder="Write long-term goals here..."></textarea>
+        </div>
+    </div>
+
+    <div id="main-area">
+        <h2 style="margin: 0 0 5px 0; color: var(--accent);">Your Daily Map</h2>
+        <p style="color: #777; margin-bottom: 30px;">Tap empty nodes to place. Tap placed tasks to complete.</p>
+        
+        <div id="timeline-container">
+            </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div class="modal-content">
+            <h2 id="modal-title" style="color: var(--accent); margin-top: 0;">Daily Summary</h2>
+            <div id="modal-stats" style="margin: 20px 0; font-size: 1.1rem; color: #333;"></div>
+            <div id="modal-quote" class="marathi-quote" style="display: none;">
+                🎉 ALL TASKS COMPLETED!<br>
+                "लढवय्ये कधीच हार मानत नाहीत. आजचा दिवस तुझा होता, उद्याचाही तुझाच असेल!"
+            </div>
+            <button class="btn-end" style="width: 100%; margin-top: 15px;" onclick="document.getElementById('modal-overlay').style.display='none'">Awesome!</button>
+        </div>
+    </div>
+
+    <script>
+        const TOTAL_SLOTS = 48; 
+        let timelineState = new Array(TOTAL_SLOTS).fill(null); 
+        let activeSelection = null; 
+
+        function init() {
+            generateTimelineMap();
+            loadState();
+            document.getElementById('blueprint').addEventListener('input', (e) => {
+                localStorage.setItem('blueprint', e.target.value);
+            });
+        }
+
+        // Helper function to format 12hr time string
+        function formatTime(idx) {
+            let h = 6 + Math.floor(idx / 2);
+            let m = (idx % 2 === 0) ? '00' : '30';
+            let ampm = (h % 24) >= 12 ? 'PM' : 'AM';
+            let displayH = h % 12 || 12;
+            return `${displayH}:${m} ${ampm}`;
+        }
+
+        function generateTimelineMap() {
+            const container = document.getElementById('timeline-container');
+            container.innerHTML = '';
+            
+            for(let i = 0; i < TOTAL_SLOTS; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'time-slot';
+                slot.dataset.index = i;
+                
+                // Create the exact range: Start Time to End Time
+                let timeRangeStr = `${formatTime(i)} - ${formatTime(i + 1)}`;
+                
+                let waveAmplitude = 120; 
+                let waveFrequency = 0.5; 
+                let xOffset = Math.sin(i * waveFrequency) * waveAmplitude;
+                slot.style.transform = `translateX(${xOffset}px)`;
+
+                slot.innerHTML = `<span class="time-label">${timeRangeStr}</span><span class="task-label"></span>`;
+                
+                slot.addEventListener('dragover', (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); });
+                slot.addEventListener('dragleave', (e) => e.currentTarget.classList.remove('drag-over'));
+                slot.addEventListener('drop', handleDrop);
+                slot.addEventListener('click', () => handleSlotClick(i));
+                
+                container.appendChild(slot);
+            }
+        }
+
+        function editCard(e, btnElement) {
+            e.stopPropagation(); 
+            let cardElement = btnElement.parentElement;
+            let currentName = cardElement.dataset.name;
+            let currentDur = cardElement.dataset.duration;
+            
+            let newName = prompt("Edit Name:", currentName);
+            if(!newName) return;
+            let newDur = prompt("Edit Duration in hours (e.g., 1.5):", currentDur);
+            if(!newDur || isNaN(newDur) || parseFloat(newDur) <= 0) return;
+            
+            cardElement.dataset.name = newName;
+            cardElement.dataset.duration = newDur;
+            cardElement.querySelector('.card-title').innerText = `${newName} (${newDur}h)`;
+            
+            if(cardElement.classList.contains('selected-card')) {
+                deselectAll();
+                selectCard(cardElement);
+            }
+        }
+
+        function deselectAll() {
+            activeSelection = null;
+            document.querySelectorAll('.draggable-card').forEach(c => c.classList.remove('selected-card'));
+        }
+
+        function selectCard(cardElement) {
+            if (cardElement.classList.contains('selected-card')) {
+                deselectAll();
+                return;
+            }
+            deselectAll();
+            cardElement.classList.add('selected-card');
+            activeSelection = {
+                type: cardElement.dataset.type,
+                name: cardElement.dataset.name,
+                duration: parseFloat(cardElement.dataset.duration),
+                color: cardElement.dataset.color,
+                id: 'task_' + Date.now()
+            };
+        }
+
+        function handleSlotClick(index) {
+            let existingData = timelineState[index];
+
+            if (existingData && existingData.type === 'task') {
+                toggleCompletion(index);
+                return; 
+            }
+
+            if (activeSelection) {
+                let neededSlots = Math.ceil(activeSelection.duration * 2);
+                if (index + neededSlots > TOTAL_SLOTS) {
+                    alert("Not enough time left in the day!"); return;
+                }
+                
+                for (let i = index; i < index + neededSlots; i++) {
+                    if (timelineState[i] && timelineState[i].type === 'task') {
+                        alert("Overlap! Existing task in the way."); return;
+                    }
+                }
+
+                for (let i = index; i < index + neededSlots; i++) {
+                    timelineState[i] = { ...activeSelection, isFirst: i === index, completed: false };
+                }
+                
+                deselectAll(); 
+                saveState(); renderTimeline();
+                return;
+            } 
+            
+            if (existingData && existingData.type === 'job') {
+                toggleCompletion(index);
+            }
+        }
+
+        function toggleCompletion(index) {
+            let existingData = timelineState[index];
+            let targetId = existingData.id;
+            let currentStatus = existingData.completed;
+            for(let i=0; i<TOTAL_SLOTS; i++) {
+                if(timelineState[i] && timelineState[i].id === targetId) {
+                    timelineState[i].completed = !currentStatus;
+                }
+            }
+            saveState(); renderTimeline();
+        }
+
+        function handleDragStart(e) { 
+            deselectAll();
+            e.target.classList.add('selected-card');
+            activeSelection = {
+                type: e.target.dataset.type,
+                name: e.target.dataset.name,
+                duration: parseFloat(e.target.dataset.duration),
+                color: e.target.dataset.color,
+                id: 'task_' + Date.now()
+            };
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+            handleSlotClick(parseInt(e.currentTarget.dataset.index));
+        }
+
+        function clearTimeline() {
+            if(confirm("Clear entire schedule?")) {
+                timelineState = new Array(TOTAL_SLOTS).fill(null);
+                saveState(); renderTimeline();
+            }
+        }
+
+        function renderTimeline() {
+            const slots = document.querySelectorAll('.time-slot');
+            for(let i = 0; i < TOTAL_SLOTS; i++) {
+                let slotEl = slots[i];
+                let data = timelineState[i];
+                let labelEl = slotEl.querySelector('.task-label');
+                let timeEl = slotEl.querySelector('.time-label');
+                
+                slotEl.style.backgroundColor = 'var(--slot-empty)';
+                slotEl.style.boxShadow = '0 4px 6px rgba(0,0,0,0.08)';
+                labelEl.innerText = '';
+                timeEl.style.color = '#333';
+                
+                if (data) {
+                    slotEl.style.backgroundColor = data.color;
+                    labelEl.style.color = data.color === 'var(--card-2)' ? '#2d3436' : '#fff';
+                    timeEl.style.color = data.color === 'var(--card-2)' ? '#2d3436' : '#fff';
+
+                    if (data.isFirst) {
+                        labelEl.innerText = data.name;
+                    } else {
+                        labelEl.innerText = '↓'; 
+                    }
+
+                    if (data.completed) {
+                        slotEl.style.backgroundColor = 'var(--success)';
+                        slotEl.style.boxShadow = '0 0 20px rgba(0,206,201,0.8)';
+                        labelEl.style.color = '#fff';
+                        timeEl.style.color = '#fff';
+                        labelEl.innerText = data.isFirst ? '✓ ' + data.name : '✓';
+                    }
+                }
+            }
+        }
+
+        function updateCountdown() {
+            const dateInput = document.getElementById('exam-date').value;
+            if(!dateInput) return;
+            localStorage.setItem('examDate', dateInput);
+            const targetDate = new Date(dateInput); targetDate.setHours(0,0,0,0);
+            const today = new Date(); today.setHours(0,0,0,0);
+            const diffDays = Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24)); 
+            document.getElementById('days-remaining').innerText = diffDays >= 0 ? diffDays : "0";
+        }
+
+        function endDay() {
+            let planned = 0, completed = 0;
+            let pendingTasks = new Set();
+            for(let i=0; i<TOTAL_SLOTS; i++) {
+                if(timelineState[i] && timelineState[i].type === 'task') {
+                    planned++;
+                    if(timelineState[i].completed) completed++;
+                    else pendingTasks.add(timelineState[i].name);
+                }
+            }
+
+            let percent = planned === 0 ? 0 : Math.round((completed / planned) * 100);
+            let statsHtml = `<p><strong>Planned:</strong> ${planned / 2} hours</p><p><strong>Done:</strong> ${completed / 2} hours</p><p style="font-size: 1.5rem; color: var(--accent); font-weight: bold;">${percent}% Complete</p>`;
+
+            if(pendingTasks.size > 0) {
+                statsHtml += `<p style="color:red; margin-top:10px;"><strong>Pending:</strong><br>${Array.from(pendingTasks).join(', ')}</p>`;
+                document.getElementById('modal-quote').style.display = 'none';
+            } else if (planned > 0 && percent === 100) {
+                document.getElementById('modal-quote').style.display = 'block';
+            } else {
+                document.getElementById('modal-quote').style.display = 'none';
+                statsHtml += `<p>No study tasks scheduled today.</p>`;
+            }
+
+            document.getElementById('modal-stats').innerHTML = statsHtml;
+            document.getElementById('modal-overlay').style.display = 'flex';
+        }
+
+        function saveState() { localStorage.setItem('timelineState', JSON.stringify(timelineState)); }
+        function loadState() {
+            const savedBP = localStorage.getItem('blueprint'); if(savedBP) document.getElementById('blueprint').value = savedBP;
+            const savedDate = localStorage.getItem('examDate'); if(savedDate) { document.getElementById('exam-date').value = savedDate; updateCountdown(); }
+            const savedSched = localStorage.getItem('timelineState'); if(savedSched) { timelineState = JSON.parse(savedSched); renderTimeline(); }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
             <div class="card-container">
                 <div class="draggable-card c-1" draggable="true" data-type="task" data-name="Subject 1" data-duration="2" data-color="var(--card-1)" onclick="selectCard(this)" ondragstart="handleDragStart(event)">
                     <span class="card-title">Subject 1 (2h)</span>
@@ -407,3 +704,4 @@
     </script>
 </body>
 </html>
+
