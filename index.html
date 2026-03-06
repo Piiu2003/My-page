@@ -385,10 +385,119 @@ select.appendChild(option)
 
 }
 
+/* -------- CHART FUNCTIONS -------- */
+
+function showExpenseChart(){
+
+if(chartInstance) chartInstance.destroy()
+
+const monthId=document.getElementById("monthSelect").value || currentMonth
+
+const data=transactions.filter(t=>t.month===monthId && t.type==="expense")
+
+const map={}
+
+data.forEach(t=>{
+map[t.category]=(map[t.category]||0)+t.amount
+})
+
+chartInstance=new Chart(document.getElementById("chartCanvas"),{
+
+type:"pie",
+
+data:{
+labels:Object.keys(map),
+datasets:[{
+data:Object.values(map),
+backgroundColor:[
+"#ff6384",
+"#36a2eb",
+"#ffce56",
+"#4bc0c0",
+"#9966ff",
+"#ff9f40",
+"#8bc34a",
+"#e91e63"
+]
+}]
+}
+
+})
+
+}
+
+function showTrend(){
+
+if(chartInstance) chartInstance.destroy()
+
+const labels=[]
+const income=[]
+const expense=[]
+
+months.forEach(m=>{
+
+labels.push(new Date(m.start).toLocaleDateString())
+
+let inc=0
+let exp=0
+
+transactions.filter(t=>t.month===m.id).forEach(t=>{
+if(t.type==="income") inc+=t.amount
+else exp+=t.amount
+})
+
+income.push(inc)
+expense.push(exp)
+
+})
+
+chartInstance=new Chart(document.getElementById("chartCanvas"),{
+
+type:"line",
+
+data:{
+labels:labels,
+datasets:[
+{
+label:"Income",
+data:income,
+borderColor:"#2ecc71",
+borderWidth:3,
+fill:false
+},
+{
+label:"Expense",
+data:expense,
+borderColor:"#e74c3c",
+borderWidth:3,
+fill:false
+}
+]
+}
+
+})
+
+}
+
+function closeChart(){
+
+if(chartInstance){
+chartInstance.destroy()
+chartInstance=null
+}
+
+}
+
+/* -------- BUTTON CONNECTIONS -------- */
+
 document.getElementById("addEntryBtn").onclick=addTransaction
 document.getElementById("startMonth").onclick=startMonth
 document.getElementById("endMonth").onclick=endMonth
 document.getElementById("monthSelect").onchange=render
+
+document.getElementById("showChart").onclick=showExpenseChart
+document.getElementById("showTrend").onclick=showTrend
+document.getElementById("closeChart").onclick=closeChart
 
 updateMonthDropdown()
 render()
